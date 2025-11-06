@@ -143,5 +143,5 @@ wss.on("connection", (ws: WebSocket) => {
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 server.listen(PORT, () => {
-  console.log(`🚀 Virtual Office server running on port ${PORT}`);
+  console.log(`🚀 Huddle server running on port ${PORT}`);
 });

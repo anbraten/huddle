@@ -1,4 +1,4 @@
-# 🏢 Virtual Office
+# 💬 Huddle
 
 A beautiful, real-time virtual office application where you can walk around and interact with colleagues. Built with TypeScript, WebSockets, and HTML5 Canvas.
 
