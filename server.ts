@@ -69,8 +69,9 @@ wss.on("connection", (ws: WebSocket) => {
           const user: User = {
             id: userId,
             name: message.name || `User${users.size + 1}`,
-            x: Math.random() * 70 + 50,
-            y: Math.random() * 40 + 50,
+            // Users will spawn in client's entry zone (handled by map)
+            x: 0,
+            y: 0,
             color: generateColor(),
           };
 

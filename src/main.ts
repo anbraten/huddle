@@ -1,4 +1,5 @@
 import "./style.css";
+import { OfficeMap } from "./map";
 
 interface User {
   id: string;
@@ -29,6 +30,8 @@ class VirtualOffice {
   private keys: Set<string> = new Set();
 
   private animationId: number | null = null;
+
+  private map: OfficeMap | null = null;
 
   private readonly AVATAR_SIZE = 50;
   private readonly MOVE_SPEED = 5;
@@ -65,6 +68,9 @@ class VirtualOffice {
 
     // Scale context to match DPI
     this.ctx.scale(dpr, dpr);
+
+    // Initialize map with canvas dimensions
+    this.map = new OfficeMap(width, height);
   }
 
   private setupKeyboardControls() {
@@ -126,6 +132,23 @@ class VirtualOffice {
     switch (message.type) {
       case "init":
         this.currentUser = message.user!;
+
+        // Set spawn position from map
+        if (this.map) {
+          const spawnPos = this.map.getRandomSpawnPosition();
+          this.currentUser.x = spawnPos.x;
+          this.currentUser.y = spawnPos.y;
+
+          // Send initial position to server
+          this.ws?.send(
+            JSON.stringify({
+              type: "move",
+              x: this.currentUser.x,
+              y: this.currentUser.y,
+            })
+          );
+        }
+
         this.users.clear();
         message.users!.forEach((user) => {
           this.users.set(user.id, user);
@@ -176,7 +199,7 @@ class VirtualOffice {
   }
 
   private update() {
-    if (!this.currentUser) return;
+    if (!this.currentUser || !this.map) return;
 
     let moved = false;
     const oldX = this.currentUser.x;
@@ -187,33 +210,40 @@ class VirtualOffice {
       ? this.MOVE_SPEED * this.MOVE_SPEED_FAST
       : this.MOVE_SPEED;
 
+    // Try moving in each direction and check for collisions
+    let newX = this.currentUser.x;
+    let newY = this.currentUser.y;
+
     if (this.keys.has("w") || this.keys.has("arrowup")) {
-      this.currentUser.y = Math.max(
-        this.AVATAR_SIZE / 2,
-        this.currentUser.y - moveSpeed
-      );
+      newY = this.currentUser.y - moveSpeed;
       moved = true;
     }
     if (this.keys.has("s") || this.keys.has("arrowdown")) {
-      this.currentUser.y = Math.min(
-        this.height() - this.AVATAR_SIZE / 2,
-        this.currentUser.y + moveSpeed
-      );
+      newY = this.currentUser.y + moveSpeed;
       moved = true;
     }
     if (this.keys.has("a") || this.keys.has("arrowleft")) {
-      this.currentUser.x = Math.max(
-        this.AVATAR_SIZE / 2,
-        this.currentUser.x - moveSpeed
-      );
+      newX = this.currentUser.x - moveSpeed;
       moved = true;
     }
     if (this.keys.has("d") || this.keys.has("arrowright")) {
-      this.currentUser.x = Math.min(
-        this.width() - this.AVATAR_SIZE / 2,
-        this.currentUser.x + moveSpeed
-      );
+      newX = this.currentUser.x + moveSpeed;
       moved = true;
+    }
+
+    // Apply movement only if no collision
+    if (moved) {
+      const radius = this.AVATAR_SIZE / 2;
+
+      // Check X movement
+      if (!this.map.checkCollision(newX, this.currentUser.y, radius)) {
+        this.currentUser.x = newX;
+      }
+
+      // Check Y movement
+      if (!this.map.checkCollision(this.currentUser.x, newY, radius)) {
+        this.currentUser.y = newY;
+      }
     }
 
     // Send position update if moved
@@ -230,12 +260,14 @@ class VirtualOffice {
   }
 
   private render() {
-    // Clear canvas with a subtle grid pattern
+    if (!this.map) return;
+
+    // Clear canvas
     this.ctx.fillStyle = "#F8FAFC";
     this.ctx.fillRect(0, 0, this.width(), this.height());
 
-    // Draw grid
-    this.drawGrid();
+    // Draw map (zones and walls)
+    this.map.render(this.ctx);
 
     // Draw all users
     this.users.forEach((user) => {
@@ -250,29 +282,6 @@ class VirtualOffice {
         }
       }
     });
-  }
-
-  private drawGrid() {
-    this.ctx.strokeStyle = "#E2E8F0";
-    this.ctx.lineWidth = 1;
-
-    const gridSize = 50;
-
-    // Vertical lines
-    for (let x = 0; x <= this.width(); x += gridSize) {
-      this.ctx.beginPath();
-      this.ctx.moveTo(x, 0);
-      this.ctx.lineTo(x, this.height());
-      this.ctx.stroke();
-    }
-
-    // Horizontal lines
-    for (let y = 0; y <= this.height(); y += gridSize) {
-      this.ctx.beginPath();
-      this.ctx.moveTo(0, y);
-      this.ctx.lineTo(this.width(), y);
-      this.ctx.stroke();
-    }
   }
 
   private drawUser(user: User, isCurrentUser: boolean) {

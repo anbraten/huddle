@@ -5,6 +5,7 @@ A beautiful, real-time virtual office application where you can walk around and 
 ## ✨ Features
 
 - 🚶 **Walk around freely** - Use WASD or Arrow keys to navigate the office space
+- 🏗️ **Structured office layout** - Navigate through different zones: Entry area, Meeting Room, and Open Office with realistic wall collision
 - 👥 **See colleagues in real-time** - All users appear as colorful avatars with their names
 - 💬 **Proximity detection** - Get closer to someone and a chat bubble appears, indicating you're in conversation range
 - 🔄 **Username persistence** - Your username is saved locally and auto-filled on return visits
@@ -75,9 +76,17 @@ Open multiple browser tabs or windows to simulate multiple users in the office. 
 - Keyboard input handling
 - Smooth animation loop using `requestAnimationFrame`
 
+### Frontend (`src/map.ts`)
+
+- Office layout with walls and zones
+- Collision detection system
+- Spawn point management
+- Modular design for easy layout modifications
+
 ### Key Components
 
 - **VirtualOffice class**: Main application logic, rendering, and WebSocket handling
+- **OfficeMap class**: Map layout, collision detection, and zone management
 - **User interface**: Clean login screen and immersive office canvas
 - **Proximity detection**: Calculates distance between users and shows interaction indicators
 
@@ -86,7 +95,8 @@ Open multiple browser tabs or windows to simulate multiple users in the office. 
 - **Gradient backgrounds**: Beautiful purple gradients for visual appeal
 - **Glassmorphism**: Translucent UI elements with backdrop blur
 - **Smooth animations**: Fade-in effects and hover states
-- **Grid layout**: Subtle grid on the office canvas for spatial context
+- **Structured office layout**: Different colored zones (Entry, Meeting Room, Open Office)
+- **Realistic walls**: Collision detection prevents walking through walls
 - **Color-coded avatars**: Each user gets a unique color
 - **Shadow effects**: Depth and dimension with carefully crafted shadows
 
