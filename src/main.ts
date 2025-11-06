@@ -1,5 +1,6 @@
 import "./style.css";
 import { OfficeMap } from "./map";
+import { AudioManager } from "./audio";
 
 interface User {
   id: string;
@@ -10,10 +11,18 @@ interface User {
 }
 
 interface ServerMessage {
-  type: "init" | "users" | "user-joined" | "user-moved" | "user-left";
+  type:
+    | "init"
+    | "users"
+    | "user-joined"
+    | "user-moved"
+    | "user-left"
+    | "webrtc-signal";
   userId?: string;
   user?: User;
   users?: User[];
+  fromUserId?: string;
+  signal?: any;
 }
 
 class VirtualOffice {
@@ -33,10 +42,15 @@ class VirtualOffice {
 
   private map: OfficeMap | null = null;
 
+  private audioManager: AudioManager | null = null;
+
+  private connectedPeers: Set<string> = new Set();
+
   private readonly AVATAR_SIZE = 50;
   private readonly MOVE_SPEED = 5;
   private readonly MOVE_SPEED_FAST = 2;
   private readonly PROXIMITY_DISTANCE = 120;
+  private readonly VOICE_DISTANCE = 150; // Slightly larger than visual proximity
 
   constructor() {
     this.canvas = document.getElementById("office-canvas") as HTMLCanvasElement;
@@ -100,7 +114,27 @@ class VirtualOffice {
     });
   }
 
-  public connect(username: string) {
+  public async connect(username: string) {
+    // Initialize audio manager
+    this.audioManager = new AudioManager(
+      (targetUserId: string, signal: any) => {
+        // Send WebRTC signal through WebSocket
+        this.ws?.send(
+          JSON.stringify({
+            type: "webrtc-signal",
+            targetUserId,
+            signal,
+          })
+        );
+      }
+    );
+
+    // Request microphone access
+    const audioReady = await this.audioManager.initialize();
+    if (!audioReady) {
+      console.warn("Continuing without audio");
+    }
+
     this.ws = new WebSocket("ws://localhost:3001");
 
     this.ws.onopen = () => {
@@ -125,6 +159,7 @@ class VirtualOffice {
       if (this.animationId) {
         cancelAnimationFrame(this.animationId);
       }
+      this.audioManager?.cleanup();
     };
   }
 
@@ -170,6 +205,18 @@ class VirtualOffice {
       case "user-left":
         this.users.delete(message.userId!);
         this.updateUserCount();
+        // Disconnect audio if connected
+        if (message.userId) {
+          this.audioManager?.disconnectFromPeer(message.userId);
+          this.connectedPeers.delete(message.userId);
+        }
+        break;
+
+      case "webrtc-signal":
+        // Handle WebRTC signaling
+        if (message.fromUserId && message.signal) {
+          this.audioManager?.handleSignal(message.fromUserId, message.signal);
+        }
         break;
     }
   }
@@ -257,6 +304,43 @@ class VirtualOffice {
         })
       );
     }
+
+    // Check proximity for voice connections
+    this.updateVoiceConnections();
+  }
+
+  private updateVoiceConnections() {
+    if (!this.currentUser || !this.audioManager) return;
+
+    const usersInRange = new Set<string>();
+
+    // Find all users within voice distance
+    this.users.forEach((user) => {
+      if (user.id === this.currentUser!.id) return;
+
+      const distance = this.getDistance(this.currentUser!, user);
+      if (distance < this.VOICE_DISTANCE) {
+        usersInRange.add(user.id);
+      }
+    });
+
+    // Connect to users in range
+    usersInRange.forEach((userId) => {
+      if (!this.connectedPeers.has(userId)) {
+        // We initiate if our userId is lexicographically greater (prevents both sides initiating)
+        const shouldInitiate = this.currentUser!.id > userId;
+        this.audioManager!.connectToPeer(userId, shouldInitiate);
+        this.connectedPeers.add(userId);
+      }
+    });
+
+    // Disconnect from users out of range
+    this.connectedPeers.forEach((userId) => {
+      if (!usersInRange.has(userId)) {
+        this.audioManager!.disconnectFromPeer(userId);
+        this.connectedPeers.delete(userId);
+      }
+    });
   }
 
   private render() {
@@ -280,8 +364,31 @@ class VirtualOffice {
         if (distance < this.PROXIMITY_DISTANCE) {
           this.drawProximityIndicator(user, distance);
         }
+
+        // Draw voice indicator if connected
+        if (this.connectedPeers.has(user.id)) {
+          this.drawVoiceIndicator(user);
+        }
       }
     });
+  }
+
+  private drawVoiceIndicator(user: User) {
+    const ctx = this.ctx;
+    const indicatorY = user.y - this.AVATAR_SIZE / 2 - 15;
+
+    ctx.save();
+    ctx.fillStyle = "#10B981";
+    ctx.font = "bold 20px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Draw speaker emoji with green glow
+    ctx.shadowColor = "#10B981";
+    ctx.shadowBlur = 10;
+    ctx.fillText("🔊", user.x, indicatorY);
+
+    ctx.restore();
   }
 
   private drawUser(user: User, isCurrentUser: boolean) {
@@ -406,6 +513,14 @@ class VirtualOffice {
       this.ws.send(JSON.stringify({ type: "leave" }));
       this.ws.close();
     }
+    this.audioManager?.cleanup();
+  }
+
+  public toggleMute(): boolean {
+    if (this.audioManager) {
+      return this.audioManager.toggleMute();
+    }
+    return false;
   }
 }
 
@@ -418,6 +533,8 @@ const usernameInput = document.getElementById(
 const joinBtn = document.getElementById("join-btn")!;
 const welcomeBackMsg = document.getElementById("welcome-back")!;
 const changeNameBtn = document.getElementById("change-name-btn")!;
+const muteBtn = document.getElementById("mute-btn")!;
+const muteIcon = document.getElementById("mute-icon")!;
 
 let office: VirtualOffice | null = null;
 
@@ -477,6 +594,14 @@ usernameInput.addEventListener("keypress", (e) => {
 changeNameBtn.addEventListener("click", (e) => {
   e.preventDefault();
   clearUsername();
+});
+
+muteBtn.addEventListener("click", () => {
+  if (office) {
+    const isMuted = office.toggleMute();
+    muteIcon.textContent = isMuted ? "🔇" : "🎤";
+    muteBtn.style.backgroundColor = isMuted ? "#EF4444" : "";
+  }
 });
 
 // Cleanup on page unload

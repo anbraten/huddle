@@ -10,17 +10,27 @@ interface User {
 }
 
 interface ClientMessage {
-  type: "join" | "move" | "leave";
+  type: "join" | "move" | "leave" | "webrtc-signal";
   name?: string;
   x?: number;
   y?: number;
+  targetUserId?: string;
+  signal?: any;
 }
 
 interface ServerMessage {
-  type: "init" | "users" | "user-joined" | "user-moved" | "user-left";
+  type:
+    | "init"
+    | "users"
+    | "user-joined"
+    | "user-moved"
+    | "user-left"
+    | "webrtc-signal";
   userId?: string;
   user?: User;
   users?: User[];
+  fromUserId?: string;
+  signal?: any;
 }
 
 const users = new Map<string, User>();
@@ -125,6 +135,22 @@ wss.on("connection", (ws: WebSocket) => {
               userId,
             } as ServerMessage);
             console.log(`User left (${userId})`);
+          }
+          break;
+
+        case "webrtc-signal":
+          // Relay WebRTC signaling messages between peers
+          if (userId && message.targetUserId && message.signal) {
+            const targetWs = connections.get(message.targetUserId);
+            if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+              targetWs.send(
+                JSON.stringify({
+                  type: "webrtc-signal",
+                  fromUserId: userId,
+                  signal: message.signal,
+                })
+              );
+            }
           }
           break;
       }

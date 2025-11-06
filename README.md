@@ -7,11 +7,13 @@ A beautiful, real-time virtual office application where you can walk around and 
 - 🚶 **Walk around freely** - Use WASD or Arrow keys to navigate the office space
 - 🏗️ **Structured office layout** - Navigate through different zones: Entry area, Meeting Room, and Open Office with realistic wall collision
 - 👥 **See colleagues in real-time** - All users appear as colorful avatars with their names
+- 🎙️ **Proximity-based voice chat** - Automatically connect to voice calls when you get close to colleagues using WebRTC
+- 🔇 **Mute control** - Toggle your microphone on/off with a simple button
 - 💬 **Proximity detection** - Get closer to someone and a chat bubble appears, indicating you're in conversation range
 - 🔄 **Username persistence** - Your username is saved locally and auto-filled on return visits
 - 🎨 **Modern, clean UI** - Gradient backgrounds, smooth animations, and glassmorphism effects
 - ⚡ **Real-time updates** - WebSocket-based communication for instant position synchronization
-- 🎯 **KISS principle** - Simple, straightforward codebase with no unnecessary dependencies
+- 🎯 **KISS principle** - Simple, straightforward codebase with minimal dependencies
 
 ## 🚀 Getting Started
 
@@ -51,14 +53,17 @@ This starts the Vite dev server (usually on http://localhost:5173).
 ### Usage
 
 1. Open your browser to the Vite dev server URL (e.g., http://localhost:5173)
-2. Enter your name
-3. Click "Join Office"
-4. Use **WASD** or **Arrow Keys** to move around
-5. Get close to other users (within the proximity range) to see chat bubbles appear!
+2. **Allow microphone access** when prompted (required for voice chat)
+3. Enter your name
+4. Click "Join Office"
+5. Use **WASD** or **Arrow Keys** to move around
+6. **Walk close to other users** - Voice chat automatically connects when within range!
+7. Click the **microphone button** (top-left) to mute/unmute yourself
+8. A 🔊 speaker icon appears above users you're connected to
 
 ### Testing with Multiple Users
 
-Open multiple browser tabs or windows to simulate multiple users in the office. Each tab will be a separate user that can move independently.
+Open multiple browser tabs or windows to simulate multiple users in the office. Each tab will be a separate user that can move independently. **Note:** You'll hear audio feedback when testing with multiple tabs on the same computer - this is normal!
 
 ## 🏗️ Architecture
 
@@ -68,6 +73,7 @@ Open multiple browser tabs or windows to simulate multiple users in the office. 
 - In-memory user state management
 - Broadcasts position updates to all connected clients
 - Handles user join/leave events
+- Relays WebRTC signaling for peer-to-peer voice connections
 
 ### Frontend (`src/main.ts`)
 
@@ -75,6 +81,14 @@ Open multiple browser tabs or windows to simulate multiple users in the office. 
 - WebSocket client for real-time communication
 - Keyboard input handling
 - Smooth animation loop using `requestAnimationFrame`
+- Proximity-based voice connection management
+
+### Frontend (`src/audio.ts`)
+
+- WebRTC peer connection management using simple-peer
+- Audio stream handling and routing
+- Auto-connect/disconnect based on proximity
+- Mute/unmute controls
 
 ### Frontend (`src/map.ts`)
 
@@ -99,24 +113,29 @@ Open multiple browser tabs or windows to simulate multiple users in the office. 
 - **Realistic walls**: Collision detection prevents walking through walls
 - **Color-coded avatars**: Each user gets a unique color
 - **Shadow effects**: Depth and dimension with carefully crafted shadows
+- **Voice indicators**: 🔊 speaker icon shows active voice connections
 
 ## 🔧 Technical Stack
 
 - **TypeScript**: Type-safe code throughout
 - **Vite**: Fast development and build tooling
 - **WebSocket (ws)**: Real-time bidirectional communication
+- **Native WebRTC APIs**: Peer-to-peer voice communication (no external libraries!)
 - **HTML5 Canvas**: Hardware-accelerated 2D rendering
 - **CSS3**: Modern styling with gradients, animations, and backdrop filters
 
-## 🚀 Future Enhancements (WebRTC for voice calls)
+## 🚀 Future Enhancements
 
-The current implementation includes proximity detection with visual indicators. To add actual voice calls:
+Potential improvements to consider:
 
-1. Integrate a WebRTC library (e.g., simple-peer)
-2. When users are in proximity, initiate a peer connection
-3. Handle audio streams and connect them
-4. Add mute/unmute controls
-5. Support group conversations when multiple users are nearby
+- **STUN/TURN servers**: Enable voice chat across different networks (currently local network only)
+- **Group conversations**: Support multiple people talking at once
+- **Video support**: Add optional video streams
+- **More rooms**: Expand the office layout with additional zones
+- **Persistent user data**: Save user positions and preferences
+- **Chat messages**: Text-based communication alongside voice
+- **Screen sharing**: Share your screen with nearby colleagues
+- **Custom avatars**: Allow users to upload or customize their avatars
 
 ## 📝 License
 
