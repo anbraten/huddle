@@ -13,9 +13,10 @@ interface SignalData {
 
 export class AudioManager {
   private peers: Map<string, PeerConnection> = new Map();
-  private localStream: MediaStream | null = null;
+  private audioStream: MediaStream | null = null;
   private isMuted: boolean = false;
   private onSignal: (targetUserId: string, signal: SignalData) => void;
+  private isInitializing: boolean = false;
 
   // Simple ICE configuration - works for local network
   private iceConfig: RTCConfiguration = {
@@ -26,9 +27,26 @@ export class AudioManager {
     this.onSignal = onSignal;
   }
 
-  public async initialize(): Promise<boolean> {
+  private async openAudioStream(): Promise<boolean> {
+    // If already initialized, return true
+    if (this.audioStream) {
+      return true;
+    }
+
+    // If currently initializing, wait for it
+    if (this.isInitializing) {
+      // Wait for initialization to complete
+      while (this.isInitializing) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      return this.audioStream !== null;
+    }
+
+    // Initialize the stream
+    this.isInitializing = true;
     try {
-      this.localStream = await navigator.mediaDevices.getUserMedia({
+      console.log("Requesting microphone access...");
+      this.audioStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -36,14 +54,25 @@ export class AudioManager {
         },
         video: false,
       });
-      console.log("Audio initialized successfully");
+      console.log("Microphone access granted");
+      this.isInitializing = false;
       return true;
     } catch (error) {
       console.error("Failed to get audio access:", error);
       alert(
-        "Microphone access is required for voice chat. Please allow microphone access and refresh."
+        "Microphone access is required for voice chat. Please allow microphone access."
       );
+      this.isInitializing = false;
       return false;
+    }
+  }
+
+  private async closeAudioStream() {
+    if (this.audioStream) {
+      console.log("Stopping microphone");
+      this.audioStream.getTracks().forEach((track) => track.stop());
+      this.audioStream = null;
+      this.isMuted = false; // Reset mute state
     }
   }
 
@@ -53,8 +82,10 @@ export class AudioManager {
       return;
     }
 
-    if (!this.localStream) {
-      console.error("Cannot connect: local stream not initialized");
+    // Ensure we have microphone access before connecting
+    const streamReady = await this.openAudioStream();
+    if (!streamReady || !this.audioStream) {
+      console.error("Cannot connect: failed to get microphone access");
       return;
     }
 
@@ -65,8 +96,8 @@ export class AudioManager {
     const pc = new RTCPeerConnection(this.iceConfig);
 
     // Add local stream to connection
-    this.localStream.getTracks().forEach((track) => {
-      pc.addTrack(track, this.localStream!);
+    this.audioStream.getTracks().forEach((track) => {
+      pc.addTrack(track, this.audioStream!);
     });
 
     // Handle incoming tracks
@@ -161,6 +192,12 @@ export class AudioManager {
         peerConnection.audioElement.remove();
       }
       this.peers.delete(userId);
+
+      // Stop local stream if no more peers are connected
+      if (this.peers.size === 0 && this.audioStream) {
+        console.log("No more peers connected, stopping microphone");
+        this.closeAudioStream();
+      }
     }
   }
 
@@ -177,9 +214,9 @@ export class AudioManager {
   }
 
   public toggleMute(): boolean {
-    if (this.localStream) {
+    if (this.audioStream) {
       this.isMuted = !this.isMuted;
-      this.localStream.getAudioTracks().forEach((track) => {
+      this.audioStream.getAudioTracks().forEach((track) => {
         track.enabled = !this.isMuted;
       });
       console.log(`Microphone ${this.isMuted ? "muted" : "unmuted"}`);
@@ -215,9 +252,8 @@ export class AudioManager {
 
   public cleanup() {
     this.disconnectAll();
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => track.stop());
-      this.localStream = null;
+    if (this.audioStream) {
+      this.closeAudioStream();
     }
   }
 }

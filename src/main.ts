@@ -2,34 +2,25 @@ import "./style.css";
 import { OfficeMap } from "./map";
 import { AudioManager } from "./audio";
 import { Renderer, type User } from "./renderer";
-
-interface ServerMessage {
-  type:
-    | "init"
-    | "users"
-    | "user-joined"
-    | "user-moved"
-    | "user-left"
-    | "webrtc-signal";
-  userId?: string;
-  user?: User;
-  users?: User[];
-  fromUserId?: string;
-  signal?: any;
-}
+import { InputManager } from "./input";
+import { NetworkManager } from "./network";
+import { ProximityManager, type Cluster } from "./proximity";
+import type { ServerMessage } from "../shared/types";
 
 class VirtualOffice {
   private canvas: HTMLCanvasElement;
 
   private ctx: CanvasRenderingContext2D;
 
-  private ws: WebSocket | null = null;
+  private network: NetworkManager;
+
+  private input: InputManager;
+
+  private proximityManager: ProximityManager;
 
   private currentUser: User | null = null;
 
   private users: Map<string, User> = new Map();
-
-  private keys: Set<string> = new Set();
 
   private animationId: number | null = null;
 
@@ -41,18 +32,22 @@ class VirtualOffice {
 
   private connectedPeers: Set<string> = new Set();
 
+  private clusters: Cluster[] = [];
+
   private readonly AVATAR_SIZE = 50;
   private readonly MOVE_SPEED = 5;
   private readonly MOVE_SPEED_FAST = 2;
-  private readonly VOICE_DISTANCE = 150; // Slightly larger than visual proximity
+  private readonly PROXIMITY_DISTANCE = 120;
 
   constructor() {
     this.canvas = document.getElementById("office-canvas") as HTMLCanvasElement;
     this.ctx = this.canvas.getContext("2d")!;
     this.renderer = new Renderer(this.ctx);
+    this.network = new NetworkManager();
+    this.proximityManager = new ProximityManager(this.PROXIMITY_DISTANCE);
+    this.input = new InputManager();
 
     this.setupCanvas();
-    this.setupKeyboardControls();
 
     // Handle window resize
     window.addEventListener("resize", () => this.setupCanvas());
@@ -78,80 +73,30 @@ class VirtualOffice {
     this.map = new OfficeMap(width, height);
   }
 
-  private setupKeyboardControls() {
-    window.addEventListener("keydown", (e) => {
-      const key = e.key.toLowerCase();
-      if (
-        [
-          "w",
-          "a",
-          "s",
-          "d",
-          "arrowup",
-          "arrowleft",
-          "arrowdown",
-          "arrowright",
-          "shift",
-        ].includes(key)
-      ) {
-        e.preventDefault();
-        this.keys.add(key);
-      }
-    });
-
-    window.addEventListener("keyup", (e) => {
-      const key = e.key.toLowerCase();
-      this.keys.delete(key);
-    });
-  }
-
   public async connect(username: string) {
     // Initialize audio manager
     this.audioManager = new AudioManager(
       (targetUserId: string, signal: any) => {
         // Send WebRTC signal through WebSocket
-        this.ws?.send(
-          JSON.stringify({
-            type: "webrtc-signal",
-            targetUserId,
-            signal,
-          })
-        );
+        this.network.sendWebRTCSignal(targetUserId, signal);
       }
     );
 
-    // Request microphone access
-    const audioReady = await this.audioManager.initialize();
-    if (!audioReady) {
-      console.warn("Continuing without audio");
-    }
-
-    this.ws = new WebSocket("ws://localhost:3001");
-
-    this.ws.onopen = () => {
-      console.log("Connected to server");
-      this.ws!.send(JSON.stringify({ type: "join", name: username }));
-    };
-
-    this.ws.onmessage = (event) => {
-      const message: ServerMessage = JSON.parse(event.data);
-      this.handleMessage(message);
-    };
-
-    this.ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      alert(
-        "Failed to connect to server. Make sure the server is running on port 3001."
-      );
-    };
-
-    this.ws.onclose = () => {
-      console.log("Disconnected from server");
+    // Setup network handlers
+    this.network.setMessageHandler((message) => this.handleMessage(message));
+    this.network.setDisconnectHandler(() => {
       if (this.animationId) {
         cancelAnimationFrame(this.animationId);
       }
       this.audioManager?.cleanup();
-    };
+    });
+
+    // Connect to server
+    try {
+      await this.network.connect(username);
+    } catch (error) {
+      alert(String(error));
+    }
   }
 
   private handleMessage(message: ServerMessage) {
@@ -166,13 +111,7 @@ class VirtualOffice {
           this.currentUser.y = spawnPos.y;
 
           // Send initial position to server
-          this.ws?.send(
-            JSON.stringify({
-              type: "move",
-              x: this.currentUser.x,
-              y: this.currentUser.y,
-            })
-          );
+          this.network.sendMove(this.currentUser.x, this.currentUser.y);
         }
 
         // Initialize users list with all existing users
@@ -238,12 +177,11 @@ class VirtualOffice {
   private update() {
     if (!this.currentUser || !this.map) return;
 
-    let moved = false;
     const oldX = this.currentUser.x;
     const oldY = this.currentUser.y;
 
     // Handle movement
-    const moveSpeed = this.keys.has("shift")
+    const moveSpeed = this.input.isSpeedBoostActive()
       ? this.MOVE_SPEED * this.MOVE_SPEED_FAST
       : this.MOVE_SPEED;
 
@@ -251,22 +189,20 @@ class VirtualOffice {
     let newX = this.currentUser.x;
     let newY = this.currentUser.y;
 
-    if (this.keys.has("w") || this.keys.has("arrowup")) {
+    if (this.input.isMovingUp()) {
       newY = this.currentUser.y - moveSpeed;
-      moved = true;
     }
-    if (this.keys.has("s") || this.keys.has("arrowdown")) {
+    if (this.input.isMovingDown()) {
       newY = this.currentUser.y + moveSpeed;
-      moved = true;
     }
-    if (this.keys.has("a") || this.keys.has("arrowleft")) {
+    if (this.input.isMovingLeft()) {
       newX = this.currentUser.x - moveSpeed;
-      moved = true;
     }
-    if (this.keys.has("d") || this.keys.has("arrowright")) {
+    if (this.input.isMovingRight()) {
       newX = this.currentUser.x + moveSpeed;
-      moved = true;
     }
+
+    const moved = this.input.isMoving();
 
     // Apply movement only if no collision
     if (moved) {
@@ -286,13 +222,7 @@ class VirtualOffice {
     // Send position update if moved
     if (moved && (oldX !== this.currentUser.x || oldY !== this.currentUser.y)) {
       this.users.set(this.currentUser.id, this.currentUser);
-      this.ws?.send(
-        JSON.stringify({
-          type: "move",
-          x: this.currentUser.x,
-          y: this.currentUser.y,
-        })
-      );
+      this.network.sendMove(this.currentUser.x, this.currentUser.y);
     }
 
     // Check proximity for voice connections
@@ -302,17 +232,14 @@ class VirtualOffice {
   private updateVoiceConnections() {
     if (!this.currentUser || !this.audioManager) return;
 
-    const usersInRange = new Set<string>();
+    // Calculate all clusters based on proximity
+    this.clusters = this.proximityManager.calculateClusters(this.users);
 
-    // Find all users within voice distance
-    this.users.forEach((user) => {
-      if (user.id === this.currentUser!.id) return;
-
-      const distance = this.getDistance(this.currentUser!, user);
-      if (distance < this.VOICE_DISTANCE) {
-        usersInRange.add(user.id);
-      }
-    });
+    // Get all users in the same cluster(s) as current user
+    const usersInRange = this.proximityManager.getUsersInProximity(
+      this.currentUser.id,
+      this.clusters
+    );
 
     // Connect to users in range
     usersInRange.forEach((userId) => {
@@ -346,20 +273,12 @@ class VirtualOffice {
       users: this.users,
       currentUser: this.currentUser,
       connectedPeers: this.connectedPeers,
+      clusters: this.clusters,
     });
   }
 
-  private getDistance(user1: User, user2: User): number {
-    const dx = user1.x - user2.x;
-    const dy = user1.y - user2.y;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-
   public disconnect() {
-    if (this.ws) {
-      this.ws.send(JSON.stringify({ type: "leave" }));
-      this.ws.close();
-    }
+    this.network.disconnect();
     this.audioManager?.cleanup();
   }
 

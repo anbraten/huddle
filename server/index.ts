@@ -1,37 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { createServer } from "http";
-
-interface User {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-  color: string;
-}
-
-interface ClientMessage {
-  type: "join" | "move" | "leave" | "webrtc-signal";
-  name?: string;
-  x?: number;
-  y?: number;
-  targetUserId?: string;
-  signal?: any;
-}
-
-interface ServerMessage {
-  type:
-    | "init"
-    | "users"
-    | "user-joined"
-    | "user-moved"
-    | "user-left"
-    | "webrtc-signal";
-  userId?: string;
-  user?: User;
-  users?: User[];
-  fromUserId?: string;
-  signal?: any;
-}
+import type { User, ClientMessage, ServerMessage } from "../shared/types";
 
 const users = new Map<string, User>();
 const connections = new Map<string, WebSocket>();
@@ -172,7 +141,7 @@ wss.on("connection", (ws: WebSocket) => {
   });
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 server.listen(PORT, () => {
   console.log(`🚀 Virtual Office server running on port ${PORT}`);
 });

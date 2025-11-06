@@ -2,6 +2,9 @@
 
 A beautiful, real-time virtual office application where you can walk around and interact with colleagues. Built with TypeScript, WebSockets, and HTML5 Canvas.
 
+> [!NOTE]
+> :robot: This project was crafted by help from AI systems. The code is perfect and should not be questioned in any way :wink:
+
 ## ✨ Features
 
 - 🚶 **Walk around freely** - Use WASD or Arrow keys to navigate the office space
@@ -32,23 +35,15 @@ pnpm install
 
 ### Running the Application
 
-You need to run **two terminals** - one for the backend server and one for the frontend:
-
-**Terminal 1 - Backend Server:**
-
 ```bash
+# to start the backend server
 pnpm server
-```
 
-This starts the WebSocket server on port 3001.
-
-**Terminal 2 - Frontend:**
-
-```bash
+# to start the UI
 pnpm dev
 ```
 
-This starts the Vite dev server (usually on http://localhost:5173).
+This starts the Vite dev server (usually on http://localhost:5173). Vite will automatically proxy WebSocket connections to `/ws` to the backend server.
 
 ### Usage
 
@@ -69,7 +64,26 @@ Open multiple browser tabs or windows to simulate multiple users in the office. 
 
 ## 🏗️ Architecture
 
-### Backend (`server.ts`)
+### Project Structure
+
+```
+virtual-office/
+├── server/
+│   └── index.ts          # WebSocket server with signaling
+├── shared/
+│   └── types.ts          # Shared TypeScript types
+├── src/
+│   ├── main.ts           # Main application orchestration
+│   ├── renderer.ts       # Canvas rendering logic
+│   ├── audio.ts          # WebRTC voice communication
+│   ├── map.ts            # Office layout & collision detection
+│   ├── input.ts          # Keyboard input handling
+│   └── network.ts        # WebSocket communication
+├── vite.config.ts        # Vite config with WebSocket proxy
+└── package.json
+```
+
+### Backend (`server/index.ts`)
 
 - Simple WebSocket server using the `ws` library
 - In-memory user state management
@@ -80,9 +94,19 @@ Open multiple browser tabs or windows to simulate multiple users in the office. 
 ### Frontend (`src/main.ts`)
 
 - Main application logic and game loop
-- WebSocket client for real-time communication
-- Keyboard input handling
+- Coordinates between all subsystems
 - Proximity-based voice connection management
+
+### Frontend (`src/network.ts`)
+
+- WebSocket client abstraction
+- Connects to `/ws` endpoint (proxied by Vite in dev)
+- Type-safe message handling
+
+### Frontend (`src/input.ts`)
+
+- Keyboard input management
+- Movement and action detection
 
 ### Frontend (`src/renderer.ts`)
 
@@ -106,10 +130,13 @@ Open multiple browser tabs or windows to simulate multiple users in the office. 
 
 ### Key Components
 
-- **VirtualOffice class**: Main application logic and WebSocket handling
+- **VirtualOffice class**: Main application coordination and orchestration
+- **NetworkManager class**: WebSocket communication abstraction
+- **InputManager class**: Keyboard input handling
 - **Renderer class**: All canvas drawing and visual effects
 - **AudioManager class**: WebRTC voice communication
 - **OfficeMap class**: Map layout, collision detection, and zone management
+- **Shared Types**: Common interfaces used by both client and server
 
 ## 🎨 Design Features
 

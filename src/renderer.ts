@@ -1,17 +1,12 @@
 import { OfficeMap } from "./map";
+import type { User } from "../shared/types";
+import type { Cluster } from "./proximity";
 
-export interface User {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-  color: string;
-}
+export type { User };
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private readonly AVATAR_SIZE = 50;
-  private readonly PROXIMITY_DISTANCE = 120;
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx;
@@ -24,6 +19,7 @@ export class Renderer {
     users,
     currentUser,
     connectedPeers,
+    clusters,
   }: {
     width: number;
     height: number;
@@ -31,6 +27,7 @@ export class Renderer {
     users: Map<string, User>;
     currentUser: User | null;
     connectedPeers: Set<string>;
+    clusters: Cluster[];
   }) {
     // Clear canvas
     this.ctx.fillStyle = "#F8FAFC";
@@ -39,24 +36,80 @@ export class Renderer {
     // Draw map (zones and walls)
     map.render(this.ctx);
 
+    // Draw conversation bubbles for clusters containing current user
+    if (currentUser) {
+      clusters.forEach((cluster) => {
+        if (cluster.userIds.has(currentUser.id)) {
+          this.drawConversationBubble(cluster);
+        }
+      });
+    }
+
     // Draw all users
     users.forEach((user) => {
       const isCurrentUser = user.id === currentUser?.id;
       this.drawUser(user, isCurrentUser);
 
-      // Check proximity to current user
-      if (!isCurrentUser && currentUser) {
-        const distance = this.getDistance(currentUser, user);
-        if (distance < this.PROXIMITY_DISTANCE) {
-          this.drawProximityIndicator(user, distance, currentUser);
-        }
-
-        // Draw voice indicator if connected
-        if (connectedPeers.has(user.id)) {
-          this.drawVoiceIndicator(user);
-        }
+      // Draw voice indicator if connected
+      if (!isCurrentUser && connectedPeers.has(user.id)) {
+        this.drawVoiceIndicator(user);
       }
     });
+  }
+
+  private drawConversationBubble(cluster: Cluster) {
+    const ctx = this.ctx;
+
+    ctx.save();
+
+    // Draw bubble circle with gradient
+    const gradient = ctx.createRadialGradient(
+      cluster.center.x,
+      cluster.center.y,
+      0,
+      cluster.center.x,
+      cluster.center.y,
+      cluster.radius
+    );
+    gradient.addColorStop(0, "rgba(102, 126, 234, 0.08)");
+    gradient.addColorStop(1, "rgba(102, 126, 234, 0.2)");
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(cluster.center.x, cluster.center.y, cluster.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw border
+    ctx.strokeStyle = "rgba(102, 126, 234, 0.4)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 4]);
+    ctx.stroke();
+
+    // Draw conversation icon at the top of the bubble
+    ctx.restore();
+    ctx.save();
+
+    const iconY = cluster.center.y - cluster.radius + 20;
+    ctx.fillStyle = "rgba(102, 126, 234, 0.9)";
+    ctx.shadowColor = "rgba(102, 126, 234, 0.4)";
+    ctx.shadowBlur = 10;
+
+    // Draw small badge
+    this.roundRect(cluster.center.x - 20, iconY - 16, 40, 32, 16);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#FFF";
+    ctx.font = "bold 18px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("💬", cluster.center.x, iconY);
+
+    // Draw user count
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillText(cluster.users.length.toString(), cluster.center.x, iconY + 20);
+
+    ctx.restore();
   }
 
   private drawVoiceIndicator(user: User) {
@@ -131,45 +184,6 @@ export class Renderer {
     ctx.fillText(user.name, user.x, nameY + 5);
   }
 
-  private drawProximityIndicator(
-    user: User,
-    distance: number,
-    currentUser: User
-  ) {
-    const ctx = this.ctx;
-    const alpha = 1 - distance / this.PROXIMITY_DISTANCE;
-
-    // Draw connection line
-    ctx.save();
-    ctx.strokeStyle = `rgba(102, 126, 234, ${alpha * 0.3})`;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(currentUser.x, currentUser.y);
-    ctx.lineTo(user.x, user.y);
-    ctx.stroke();
-    ctx.restore();
-
-    // Draw interaction bubble
-    const bubbleY = user.y - this.AVATAR_SIZE / 2 - 40;
-    ctx.save();
-    ctx.fillStyle = `rgba(102, 126, 234, ${alpha * 0.95})`;
-    ctx.shadowColor = "rgba(102, 126, 234, 0.4)";
-    ctx.shadowBlur = 10;
-
-    this.roundRect(user.x - 40, bubbleY, 80, 32, 16);
-    ctx.fill();
-
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = "#FFF";
-    ctx.font = "bold 18px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("💬", user.x, bubbleY + 16);
-
-    ctx.restore();
-  }
-
   private roundRect(
     x: number,
     y: number,
@@ -189,11 +203,5 @@ export class Renderer {
     ctx.lineTo(x, y + radius);
     ctx.quadraticCurveTo(x, y, x + radius, y);
     ctx.closePath();
-  }
-
-  private getDistance(user1: User, user2: User): number {
-    const dx = user1.x - user2.x;
-    const dy = user1.y - user2.y;
-    return Math.sqrt(dx * dx + dy * dy);
   }
 }
