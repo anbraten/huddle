@@ -7,6 +7,8 @@ import { NetworkManager } from "./network";
 import { ProximityManager, type Cluster } from "./proximity";
 import type { ServerMessage } from "../shared/types";
 
+const LOCAL_STORAGE_PREFIX = "huddle";
+
 class VirtualOffice {
   private canvas: HTMLCanvasElement;
 
@@ -43,7 +45,16 @@ class VirtualOffice {
     this.canvas = document.getElementById("office-canvas") as HTMLCanvasElement;
     this.ctx = this.canvas.getContext("2d")!;
     this.renderer = new Renderer(this.ctx);
-    this.network = new NetworkManager();
+
+    const serverUrl =
+      new URLSearchParams(window.location.search).get("server") ??
+      localStorage.getItem(`${LOCAL_STORAGE_PREFIX}:server`) ??
+      undefined;
+    if (serverUrl) {
+      localStorage.setItem(`${LOCAL_STORAGE_PREFIX}:server`, serverUrl);
+    }
+
+    this.network = new NetworkManager(serverUrl);
     this.proximityManager = new ProximityManager(this.PROXIMITY_DISTANCE);
     this.input = new InputManager();
 
@@ -304,7 +315,7 @@ const muteIcon = document.getElementById("mute-icon")!;
 
 let office: VirtualOffice | null = null;
 
-const STORAGE_KEY = "virtual-office-username";
+const STORAGE_KEY = `${LOCAL_STORAGE_PREFIX}:username`;
 
 // Load saved username on page load
 function loadSavedUsername() {

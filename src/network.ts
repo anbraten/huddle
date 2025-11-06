@@ -33,7 +33,7 @@ export class NetworkManager {
         console.error("WebSocket error:", error);
         reject(
           new Error(
-            "Failed to connect to server. Make sure the server is running on port 3001."
+            `Failed to connect to server. Make sure the server is at ${this.serverUrl}`
           )
         );
       };
