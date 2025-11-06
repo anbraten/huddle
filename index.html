@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Virtual Office</title>
+  </head>
+  <body>
+    <div id="app">
+      <div id="login-screen">
+        <div class="login-card">
+          <h1>🏢 Virtual Office</h1>
+          <p>Enter the office and connect with your team</p>
+          <div id="welcome-back" style="display: none;"></div>
+          <input
+            type="text"
+            id="username-input"
+            placeholder="Enter your name"
+            maxlength="20"
+            autocomplete="off"
+          />
+          <button id="join-btn">Join Office</button>
+          <a href="#" id="change-name-btn" style="display: none;">Not you? Change name</a>
+        </div>
+      </div>
+      <div id="office-screen" style="display: none;">
+        <canvas id="office-canvas"></canvas>
+        <div id="controls-hint">
+          Use <kbd>WASD</kbd> or <kbd>Arrow Keys</kbd> to move
+        </div>
+        <div id="online-users">
+          <span id="user-count">0 users online</span>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
