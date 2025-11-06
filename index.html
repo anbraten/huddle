@@ -26,15 +26,13 @@
       </div>
       <div id="office-screen" style="display: none;">
         <canvas id="office-canvas"></canvas>
-        <div id="controls-hint">
-          Use <kbd>WASD</kbd> or <kbd>Arrow Keys</kbd> to move
+        <div id="toolbar">
+          <button id="mute-btn" class="toolbar-btn" title="Toggle Mute">
+            <span id="mute-icon">🎤</span>
+          </button>
+          <div class="toolbar-divider"></div>
+          <span id="user-count" class="toolbar-info">0 users online</span>
         </div>
-        <div id="online-users">
-          <span id="user-count">0 users online</span>
-        </div>
-        <button id="mute-btn" class="control-btn" title="Toggle Mute">
-          <span id="mute-icon">🎤</span>
-        </button>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

@@ -58,7 +58,9 @@ This starts the Vite dev server (usually on http://localhost:5173).
 4. Click "Join Office"
 5. Use **WASD** or **Arrow Keys** to move around
 6. **Walk close to other users** - Voice chat automatically connects when within range!
-7. Click the **microphone button** (top-left) to mute/unmute yourself
+7. Use the **toolbar at the top** to:
+   - Toggle mute/unmute with the 🎤 button
+   - See how many users are online
 8. A 🔊 speaker icon appears above users you're connected to
 
 ### Testing with Multiple Users
@@ -77,15 +79,20 @@ Open multiple browser tabs or windows to simulate multiple users in the office. 
 
 ### Frontend (`src/main.ts`)
 
-- HTML5 Canvas for rendering
+- Main application logic and game loop
 - WebSocket client for real-time communication
 - Keyboard input handling
-- Smooth animation loop using `requestAnimationFrame`
 - Proximity-based voice connection management
+
+### Frontend (`src/renderer.ts`)
+
+- Canvas rendering for users, avatars, and UI elements
+- Proximity indicators and voice connection visuals
+- Clean separation of rendering logic
 
 ### Frontend (`src/audio.ts`)
 
-- WebRTC peer connection management using simple-peer
+- Native WebRTC peer connection management
 - Audio stream handling and routing
 - Auto-connect/disconnect based on proximity
 - Mute/unmute controls
@@ -99,13 +106,14 @@ Open multiple browser tabs or windows to simulate multiple users in the office. 
 
 ### Key Components
 
-- **VirtualOffice class**: Main application logic, rendering, and WebSocket handling
+- **VirtualOffice class**: Main application logic and WebSocket handling
+- **Renderer class**: All canvas drawing and visual effects
+- **AudioManager class**: WebRTC voice communication
 - **OfficeMap class**: Map layout, collision detection, and zone management
-- **User interface**: Clean login screen and immersive office canvas
-- **Proximity detection**: Calculates distance between users and shows interaction indicators
 
 ## 🎨 Design Features
 
+- **Clean, unified toolbar**: All controls in one elegant, centered toolbar
 - **Gradient backgrounds**: Beautiful purple gradients for visual appeal
 - **Glassmorphism**: Translucent UI elements with backdrop blur
 - **Smooth animations**: Fade-in effects and hover states

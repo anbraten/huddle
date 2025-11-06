@@ -1,14 +1,7 @@
 import "./style.css";
 import { OfficeMap } from "./map";
 import { AudioManager } from "./audio";
-
-interface User {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-  color: string;
-}
+import { Renderer, type User } from "./renderer";
 
 interface ServerMessage {
   type:
@@ -44,17 +37,19 @@ class VirtualOffice {
 
   private audioManager: AudioManager | null = null;
 
+  private renderer: Renderer | null = null;
+
   private connectedPeers: Set<string> = new Set();
 
   private readonly AVATAR_SIZE = 50;
   private readonly MOVE_SPEED = 5;
   private readonly MOVE_SPEED_FAST = 2;
-  private readonly PROXIMITY_DISTANCE = 120;
   private readonly VOICE_DISTANCE = 150; // Slightly larger than visual proximity
 
   constructor() {
     this.canvas = document.getElementById("office-canvas") as HTMLCanvasElement;
     this.ctx = this.canvas.getContext("2d")!;
+    this.renderer = new Renderer(this.ctx);
 
     this.setupCanvas();
     this.setupKeyboardControls();
@@ -71,10 +66,6 @@ class VirtualOffice {
     const rect = parent.getBoundingClientRect();
     const width = rect.width;
     const height = rect.height;
-
-    // Set canvas display size (CSS pixels)
-    // this.canvas.style.width = `${width}px`;
-    // this.canvas.style.height = `${height}px`;
 
     // Set canvas buffer size (actual pixels, accounting for DPI)
     this.canvas.width = width * dpr;
@@ -184,10 +175,17 @@ class VirtualOffice {
           );
         }
 
+        // Initialize users list with all existing users
         this.users.clear();
         message.users!.forEach((user) => {
+          // Use spawn position for current user, server position for others
+          if (user.id === this.currentUser!.id && this.map) {
+            user.x = this.currentUser!.x;
+            user.y = this.currentUser!.y;
+          }
           this.users.set(user.id, user);
         });
+
         this.startGameLoop();
         break;
 
@@ -235,14 +233,6 @@ class VirtualOffice {
       this.animationId = requestAnimationFrame(loop);
     };
     loop();
-  }
-
-  private height() {
-    return this.canvas.height / (window.devicePixelRatio || 1);
-  }
-
-  private width() {
-    return this.canvas.width / (window.devicePixelRatio || 1);
   }
 
   private update() {
@@ -344,162 +334,19 @@ class VirtualOffice {
   }
 
   private render() {
-    if (!this.map) return;
+    if (!this.map || !this.renderer) return;
 
-    // Clear canvas
-    this.ctx.fillStyle = "#F8FAFC";
-    this.ctx.fillRect(0, 0, this.width(), this.height());
+    const height = this.canvas.height / (window.devicePixelRatio || 1);
+    const width = this.canvas.width / (window.devicePixelRatio || 1);
 
-    // Draw map (zones and walls)
-    this.map.render(this.ctx);
-
-    // Draw all users
-    this.users.forEach((user) => {
-      const isCurrentUser = user.id === this.currentUser?.id;
-      this.drawUser(user, isCurrentUser);
-
-      // Check proximity to current user
-      if (!isCurrentUser && this.currentUser) {
-        const distance = this.getDistance(this.currentUser, user);
-        if (distance < this.PROXIMITY_DISTANCE) {
-          this.drawProximityIndicator(user, distance);
-        }
-
-        // Draw voice indicator if connected
-        if (this.connectedPeers.has(user.id)) {
-          this.drawVoiceIndicator(user);
-        }
-      }
+    this.renderer.render({
+      width,
+      height,
+      map: this.map,
+      users: this.users,
+      currentUser: this.currentUser,
+      connectedPeers: this.connectedPeers,
     });
-  }
-
-  private drawVoiceIndicator(user: User) {
-    const ctx = this.ctx;
-    const indicatorY = user.y - this.AVATAR_SIZE / 2 - 15;
-
-    ctx.save();
-    ctx.fillStyle = "#10B981";
-    ctx.font = "bold 20px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    // Draw speaker emoji with green glow
-    ctx.shadowColor = "#10B981";
-    ctx.shadowBlur = 10;
-    ctx.fillText("🔊", user.x, indicatorY);
-
-    ctx.restore();
-  }
-
-  private drawUser(user: User, isCurrentUser: boolean) {
-    const ctx = this.ctx;
-    // const size = isCurrentUser ? this.AVATAR_SIZE + 10 : this.AVATAR_SIZE;
-    const size = this.AVATAR_SIZE;
-
-    // Shadow
-    ctx.save();
-    ctx.shadowColor = "rgba(0, 0, 0, 0.2)";
-    ctx.shadowBlur = 15;
-    ctx.shadowOffsetY = 5;
-
-    // Draw avatar circle
-    ctx.beginPath();
-    ctx.arc(user.x, user.y, size / 2, 0, Math.PI * 2);
-    ctx.fillStyle = user.color;
-    ctx.fill();
-
-    // Border
-    ctx.lineWidth = isCurrentUser ? 4 : 3;
-    ctx.strokeStyle = isCurrentUser ? "#FFF" : "rgba(255, 255, 255, 0.8)";
-    ctx.stroke();
-
-    ctx.restore();
-
-    // Draw initial
-    ctx.fillStyle = "#FFF";
-    ctx.font = `bold ${size / 2}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    const initial = user.name.charAt(0).toUpperCase();
-    ctx.fillText(initial, user.x, user.y);
-
-    // Draw name label
-    ctx.fillStyle = "#1E293B";
-    ctx.font = "bold 14px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-
-    // Background for name
-    const nameWidth = ctx.measureText(user.name).width + 16;
-    const nameHeight = 24;
-    const nameX = user.x - nameWidth / 2;
-    const nameY = user.y + size / 2 + 10;
-
-    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.1)";
-    ctx.shadowBlur = 8;
-    this.roundRect(nameX, nameY, nameWidth, nameHeight, 8);
-    ctx.fill();
-
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = isCurrentUser ? user.color : "#64748B";
-    ctx.fillText(user.name, user.x, nameY + 5);
-  }
-
-  private drawProximityIndicator(user: User, distance: number) {
-    const ctx = this.ctx;
-    const alpha = 1 - distance / this.PROXIMITY_DISTANCE;
-
-    // Draw connection line
-    ctx.save();
-    ctx.strokeStyle = `rgba(102, 126, 234, ${alpha * 0.3})`;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(this.currentUser!.x, this.currentUser!.y);
-    ctx.lineTo(user.x, user.y);
-    ctx.stroke();
-    ctx.restore();
-
-    // Draw interaction bubble
-    const bubbleY = user.y - this.AVATAR_SIZE / 2 - 40;
-    ctx.save();
-    ctx.fillStyle = `rgba(102, 126, 234, ${alpha * 0.95})`;
-    ctx.shadowColor = "rgba(102, 126, 234, 0.4)";
-    ctx.shadowBlur = 10;
-
-    this.roundRect(user.x - 40, bubbleY, 80, 32, 16);
-    ctx.fill();
-
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = "#FFF";
-    ctx.font = "bold 18px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("💬", user.x, bubbleY + 16);
-
-    ctx.restore();
-  }
-
-  private roundRect(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    radius: number
-  ) {
-    const ctx = this.ctx;
-    ctx.beginPath();
-    ctx.moveTo(x + radius, y);
-    ctx.lineTo(x + width - radius, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-    ctx.lineTo(x + width, y + height - radius);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-    ctx.lineTo(x + radius, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-    ctx.lineTo(x, y + radius);
-    ctx.quadraticCurveTo(x, y, x + radius, y);
-    ctx.closePath();
   }
 
   private getDistance(user1: User, user2: User): number {
